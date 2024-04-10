@@ -35,11 +35,45 @@
 
 (defvar c3po-buffer-name "*🤖C3PO🤖*" "The name of the C-3PO buffer.")
 
+(defvar c3po-results-file-path nil "The name of the C-3PO results file.")
+
 (defvar c3po-diff-buffer-name "*🤖C3PO Diff🤖*" "The name of the C-3PO Diff buffer.")
 
 (defvar c3po-input-buffer-name "*🤖C3PO input buffer🤖*" "The name of the C-3PO input buffer.")
 
-(defvar c3po-model "gpt-3.5-turbo" "The model for the OpenAI Chat API.")
+(defvar c3po-base-path-local-models "http://localhost:11434/v1/chat/completions" "The base URL path for local models.")
+
+(defun c3po--openai-headers ()
+  "Composes the HTTP request headers for the OpenAI API call."
+  `(("Content-Type" . "application/json")
+    ("Authorization" . ,(encode-coding-string (format "Bearer %s" c3po-api-key) 'utf-8))))
+
+(defun c3po--anthropic-headers ()
+  "Composes the HTTP request headers for the Anthropic API call."
+  `(("Content-Type" . "application/json")
+    ("anthropic-version" . "2023-06-01")
+    ("x-api-key" . ,(encode-coding-string c3po-api-key 'utf-8))))
+
+(defvar c3po-model-alist
+  `(("codellama"                 :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("codellama:13b"             :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("dolphincoder"              :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("phi"                       :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("gpt-3.5-turbo"             :url "https://api.openai.com/v1/chat/completions"      :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("gpt-4-turbo"       :url "https://api.openai.com/v1/chat/completions"      :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("llama2:7b"                 :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("llama2:13b"                :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("mistral:7b"                :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("openchat"                  :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("claude-3-haiku-20240307"   :url "https://api.anthropic.com/v1/messages" :openaiformat nil :req-headers ,'c3po--anthropic-headers)
+    ("claude-3-sonnet-20240229"  :url "https://api.anthropic.com/v1/messages" :openaiformat nil :req-headers ,'c3po--anthropic-headers))
+  "This alist maps model names to their corresponding API endpoints and whether they use OpenAI API messages.")
+
+(defun c3po-get-model-property (model prop)
+  "Get property PROP for MODEL."
+  (plist-get (cdr (assoc model c3po-model-alist)) prop))
+
+(defvar c3po-model (caar c3po-model-alist) "The model for the OpenAI Chat API.")
 
 (defvar c3po-temperature 1.0 "The temperature for the OpenAI Chat API.")
 
@@ -49,17 +83,126 @@
 
 (defvar c3po-default-post-processors '(c3po-add-to-buffer-post-processor) "List of default post-processors applied to all droids.")
 
+;; Only reply with corrected or original text, without extra details.
+;; and focus on correct spelling and punctuation.
+;; I want you to only reply with the correction and nothing else, do not provide additional information, only enhanced text or the original text.
 (defvar c3po-droids-alist
   '(
-    (assistant . (:system-prompt "You are a helpful assistant."))
+    (assistant . (:system-prompt "You are a helpful assistant.
+Answer the following question only if you know the answer or can make a well-informed guess; otherwise tell me you don't know it.
+"))
     (grammar-checker . (
                         :additional-pre-processors (c3po-show-diff-pre-processor)
                         :additional-post-processors (c3po-show-diff-post-processor)
-                        :system-prompt "
-I will communicate with you in any language and you will correct, spelling, punctuation errors, and enhance the grammar in my text.
+                        :system-prompt "You're the best grammar assistant in the world!
+I will communicate with you in any language and you will correct spelling, correctess, correct sentences, correct punctuation, correct errors, fix verbs forms, fix verbs, and enhance the grammar in my text.
 You may use contractions and avoid passive voice.
-I want you to only reply with the correction and nothing else, do not provide additional information, only enhanced text or the original text."
-                        :prefix-first-prompt-with "Correct spelling and grammar. The raw text is:\n"))
+
+Do not surround the response with any text.
+
+Make sure to follow these rules:
+<common-english-grammar-mistakes>
+  <mistake>
+    <category>Verb Tense Errors</category>
+    <description>Incorrect use of verb tenses, such as using present tense when past tense is required and vice versa.</description>
+    <description>Confusion between continuous and simple tenses.</description>
+  </mistake>
+  <mistake>
+    <category>Subject-Verb Agreement</category>
+    <description>Lack of agreement between the subject and verb in number, e.g., using a singular verb with a plural subject or vice versa.</description>
+  </mistake>
+  <mistake>
+    <category>Articles (a, an, the)</category>
+    <description>Incorrect use or omission of articles, such as using "a" instead of "an" or vice versa.</description>
+    <description>Overuse or omission of the definite article "the."</description>
+  </mistake>
+  <mistake>
+    <category>Prepositions</category>
+    <description>Misuse of prepositions, such as using "in" instead of "on" or "at," or omitting prepositions where they are needed.</description>
+  </mistake>
+  <mistake>
+    <category>Word Order</category>
+    <description>Incorrect word order in sentences, especially in questions and negative sentences.</description>
+    <description>Misplacement of adverbs or adjectives.</description>
+  </mistake>
+  <mistake>
+    <category>Pluralization</category>
+    <description>Incorrect plural forms of nouns, such as failing to add "-s" or "-es" when necessary.</description>
+  </mistake>
+  <mistake>
+    <category>Pronoun Errors</category>
+    <description>Confusion between subject and object pronouns.</description>
+    <description>Incorrect use of possessive pronouns.</description>
+  </mistake>
+  <mistake>
+    <category>Double Negatives</category>
+    <description>Using double negatives, which is grammatically incorrect in standard English.</description>
+  </mistake>
+  <mistake>
+    <category>Modal Verbs</category>
+    <description>Misuse of modal verbs like can, could, will, would, should, etc.</description>
+  </mistake>
+  <mistake>
+    <category>Confusing Similar Words</category>
+    <description>Confusing words that sound similar but have different meanings and spellings (e.g., "their," "there," and "they're").</description>
+  </mistake>
+  <mistake>
+    <category>Lack of Plural/Singular Agreement</category>
+    <description>Mistakes in matching singular and plural nouns and verbs in a sentence.</description>
+  </mistake>
+</common-english-grammar-mistakes>
+
+<example>
+test to connect to old DB after the v15 migration. to validate app can't connect to it
+
+<ok_result>
+Test to connect to old DB after v15 migration. To validate app can't connect to it.
+</ok_result>
+
+<invalid_result>
+The corrected text is:
+\"Test to connect to old DB after v15 migration. To validate app can't connect to it.\"
+</invalid_result>
+<issues>
+- Is adding additional information like 'The corrected text is:' which it was mentioned not to do it.
+- It's surrounding the result between double quotes. Result shouldn't be surrounded
+</issues>
+</example>
+"
+                        :prefix-prompt-with "Edit the following text for spelling and grammar mistakes: <text>"
+                        :sufix-prompt-with "</text>"))
+    (grammar-checker2 . (
+                        :additional-pre-processors (c3po-show-diff-pre-processor)
+                        :additional-post-processors (c3po-show-diff-post-processor)
+                        :system-prompt "
+Your task is to take the text provided by the user and rewrite it into a clear,
+grammatically correct version while preserving the original meaning as closely as possible.
+Correct any spelling mistakes, punctuation errors, verb tense issues, word choice problems, and other grammatical mistakes.
+I want you to only reply with the raw text for the correction and nothing else, do not provide additional information.
+Do not surround the response with any text.
+
+<example>
+test to connect to old DB after the v15 migration. to validate app can't connect to it
+
+<ok_result>
+Test to connect to old DB after v15 migration. To validate app can't connect to it.
+</ok_result>
+
+<invalid_result>
+The corrected text is:
+\"Test to connect to old DB after v15 migration. To validate app can't connect to it.\"
+
+</invalid_result>
+<issues>
+Errors:
+- Is adding additional information like 'The corrected text is:' which it was mentioned not to do it.
+- It's surrounding the result between quotes. Result shouldn't be surrounded
+- It's adding a line break after the result.
+</issues>
+<example>
+"
+                        :prefix-prompt-with "Correct the text delimited by triple quotes:\n\"\"\""
+                        :sufix-prompt-with "\"\"\""))
 
     (developer . (:system-prompt "
 I want you to act as a programming expert who can provide guidance, tips, and best practices for various programming languages.
@@ -79,7 +222,7 @@ I'll converse with you in any language, and you can refine my writing.
 Use contractions, avoid too much passive voice, and preserve the meaning.
 Only provide the revised text.
 All of my future messages aim to be improved."
-                 :prefix-first-prompt-with "Rewrite this:\n"))
+                 :prefix-prompt-with "Rewrite this:\n"))
     )
   "Alist of droids with a Plist of properties.
 Call `c3po-make-droid-helper-functions' to have the helper functions created if you modify this variable manually.")
@@ -113,7 +256,7 @@ It pass to the function the DROID, PROMPT, RESULT, and ARGS."
 It adds an additional processor to kill the current active region.
 It pass to the function the DROID, PROMPT, RESULT, and ARGS."
   (save-window-excursion
-    (when-let ((processors (append
+    (when-let ((processors (append c3po-default-post-processors
                             (c3po-get-droid-property droid :additional-post-processors)
                             '(c3po--replace-region-post-processor))))
       (seq-do (lambda (f) (funcall f droid prompt result args)) processors))))
@@ -126,7 +269,7 @@ It pass to the function the DROID, PROMPT, RESULT, and ARGS."
   "Pre-processor to add the DROID and PROMPT to the `c3po-buffer-name'."
   (c3po-append-result
    (if (c3po-is-initial-system-message-p)
-       (format "\n# Chat (%s) - %s\n## 🙋‍♂️ Prompt\n%s\n" droid (format-time-string "%A, %e %B %Y %T %Z") prompt)
+       (format "\n# Chat (%s)[%s] - %s\n## 🙋‍♂️ Prompt\n%s\n" droid c3po-model (format-time-string "%A, %e %B %Y %T %Z") prompt)
      (format "## 🙋‍♂️ Prompt\n%s\n" prompt)))
   (when-let ((buf (get-buffer c3po-buffer-name)))
     (with-selected-window (get-buffer-window buf)
@@ -137,54 +280,114 @@ It pass to the function the DROID, PROMPT, RESULT, and ARGS."
   (save-excursion
     (c3po-append-result (format "### 🤖 Answer\n%s\n" result))))
 
-(defun c3po--request-openai-api (callback &rest args)
-  "Send chat messages request to OpenAI API, get result via CALLBACK.
-Pass additional ARGS to the CALLBACK function."
-  (interactive)
-  (if (not c3po-api-key)
-      (message "Please provide an OpenAI API key first.")
-    (let* ((api-key c3po-api-key)
-           (url "https://api.openai.com/v1/chat/completions")
-           (model c3po-model)
-           (temperature c3po-temperature)
-           (url-request-method "POST")
-           (url-request-extra-headers `(("Content-Type" . "application/json")
-                                        ("Authorization" . ,(encode-coding-string(format "Bearer %s" api-key) 'utf-8))))
-           (url-request-data (encode-coding-string
-                              (json-encode `(:model ,model :messages ,c3po-chat-conversation :temperature ,temperature ))
-                              'utf-8)))
-      (url-retrieve url
-                    #'c3po--extract-content-answer
-                    (list callback args)))))
+(defun c3po--encode-request-body (model sys-prompt conversation temperature)
+  "Encodes the JSON body for the OpenAI API request."
+  (encode-coding-string
+   (json-encode (append `(:model ,model
+                                 :messages ,conversation
+                                 :temperature ,temperature
+                                 :max_tokens 2048
+                                 :stream :json-false)
+                        (when sys-prompt `(:system ,sys-prompt))))
+   'utf-8))
 
-(defun c3po--extract-content-answer (_status callback &rest args)
-  "Extract the last lines of a JSON string from a buffer.
-Call user's CALLBACK with the result and passes the aditional ARGS."
+(defun c3po--perform-api-call (endpoint headers body on-success extra-args)
+  "Perform the API call to ENDPOINT, sending HEADERS BODY."
+  (message ">>>Sending API call with body: %S %S %S" endpoint headers body) ;; This could be removed or hidden based on log level
+  (let ((url-request-method "POST")
+        (url-request-extra-headers headers)
+        (url-request-data body))
+  (url-retrieve endpoint
+                #'c3po--process-http-response
+                (list on-success extra-args)
+                nil ;; Prevent buffer display
+                t))) ;; Prevent buffer auto-kill
+
+(defun c3po--initiate-openai-conversation (on-success &rest extra-args)
+  "Initiate a conversation with model by sending a request and processing the response asynchronously."
+  (interactive)
+  (unless c3po-api-key
+    (error "API key is missing. Please provide it first"))
+  (let ((openaiformat (c3po-get-model-property c3po-model :openaiformat))
+        (sys-prompt (c3po-get-droid-property c3po--last-used-droid :system-prompt))
+        (url (c3po-get-model-property c3po-model :url))
+        (req-headers (funcall (c3po-get-model-property c3po-model :req-headers))))
+    (when openaiformat
+      (when (length= c3po-chat-conversation 1)
+        (setq c3po-chat-conversation (append `((("role" . "system") ("content" . ,sys-prompt))) c3po-chat-conversation)))
+      (setq sys-prompt nil))
+    (let ((body (c3po--encode-request-body c3po-model sys-prompt c3po-chat-conversation c3po-temperature)))
+      (when c3po-chat-conversation ;;debug
+        (message ">>>: %S"c3po-chat-conversation))
+      (c3po--perform-api-call url req-headers body on-success extra-args))))
+
+  ;; debug:
+  ;; (goto-char (point-min))
+  ;;  (let* ((data (buffer-substring-no-properties (1+ url-http-end-of-headers) (point-max))))
+  ;;    (message "\nresponse>>> %S" data))
+  ;;  (message "\n>>> end")
+  ;; (goto-char (point-min))
+
+(defun c3po--extract-http-response ()
+  "Extracts the HTTP response body from the current buffer."
   ;; url-http sets a marker named url-http-end-of-headers after retrieving the web content, allowing
-  ;; us to skip the HTTP headers directly using this marker:
-  (let* ((data (buffer-substring-no-properties (1+ url-http-end-of-headers) (point-max)))
-         (json-string (decode-coding-string data 'utf-8))
-         (json-object (json-read-from-string json-string))
-         (message-content (aref (cdr (assoc 'choices json-object)) 0))
-         (result (cdr (assoc 'content (cdr (assoc 'message message-content)))))
-         (args2 (car args))
-         (droid (cdr (assoc 'droid args2)))
-         (prompt (cdr (assoc 'prompt args2)))
-         (args (cdr (assoc 'args args2))))
-    ;; post-processor
-    ;; (when (string-suffix-p "\n" c3po--last-user-message)
-    ;;   (setq content (concat content "\n")))
-    (c3po--add-message "assistant" result)
-    (apply callback droid prompt result args)))
+  ;; us to skip the HTTP headers directly using this marker.
+ ;;  (goto-char (point-min))
+  ;;  (let* ((data (buffer-substring-no-properties (1+ url-http-end-of-headers) (point-max))))
+  ;;    (message "\nresponse>>> %S" data))
+  ;;  (message "\n>>> end")
+  ;; (goto-char (point-min))
+  (buffer-substring-no-properties (1+ url-http-end-of-headers) (point-max)))
+
+(defun c3po--safe-parse-json (response-body)
+  "Safely parse a JSON string from the HTTP RESPONSE-BODY."
+  (condition-case err
+      (let ((decoded-json (decode-coding-string response-body 'utf-8)))
+        (json-read-from-string decoded-json))
+    (error
+     (message "Failed to parse JSON: err: %s, body: %s" err response-body)
+     nil)))
+
+(defun c3po--extract-content-from-json2 (parsed-json)
+  "Extract the specific content from a PARSED-JSON."
+  (let ((choice-message (aref (cdr (assoc 'choices parsed-json)) 0)))
+    (cdr (assoc 'content (cdr (assoc 'message choice-message))))))
+
+(defun c3po--extract-content-from-json (parsed-json)
+  "Extract the specific content from a PARSED-JSON."
+  (let ((choice-message (aref (cdr (assoc 'content parsed-json)) 0)))
+    (cdr (assoc 'text choice-message))))
+
+(defun c3po--execute-callback (content callback args)
+  "Execute the CALLBACK function with the CONTENT and provided additional ARGS."
+  (let ((target-droid (cdr (assoc 'droid args)))
+        (query-prompt (cdr (assoc 'prompt args)))
+        (callback-args (cdr (assoc 'args args))))
+    (apply callback target-droid query-prompt content callback-args)))
+
+(defun c3po--process-http-response (_ callback &rest callback-args)
+  "Process response, extract content, then invokes CALLBACK with CALLBACK-ARGS."
+  (let* ((response-body (c3po--extract-http-response))
+         (parsed-json (c3po--safe-parse-json response-body))
+         (content (when parsed-json
+                    (if (c3po-get-model-property c3po-model :openaiformat)
+                        (c3po--extract-content-from-json2 parsed-json)
+                      (c3po--extract-content-from-json parsed-json)
+                        )
+                    )))
+    (when content
+      (c3po--add-message "assistant" content)
+      (c3po--execute-callback content callback (car callback-args)))))
 
 (defun c3po-send-conversation (droid prompt post-processors-fn &rest args)
   "Prepare the PROMPT for the DROID.
 If POST-PROCESSORS-FN is nil it'll use `c3po--apply-post-processors'.
 Pass ARGS to the `url-retrieve' function."
   (interactive)
+  (c3po--hide-diff-window)
   (catch 'my-tag
     (let* ((prompt (or
-                    prompt ;; a prompt was passed
+                    prompt ;; A prompt was passed.
                     (if current-prefix-arg ;; add prefix to current region if any
                         (if (use-region-p)
                             (c3po--make-input-buffer (format "(%s)> Enter the prompt to act on the active region" (symbol-name droid))
@@ -202,27 +405,36 @@ Pass ARGS to the `url-retrieve' function."
                      #'c3po--apply-post-processors))
            ;; in order to keep the user prompt without the configured droid prefix
            (prompt-with-prefix (if (c3po-is-initial-system-message-p)
-                                   (concat (c3po-get-droid-property droid :prefix-first-prompt-with) prompt)
+                                   (concat
+                                    (c3po-get-droid-property droid :prefix-prompt-with)
+                                    prompt
+                                    (c3po-get-droid-property droid :sufix-prompt-with))
                                  prompt)))
       (c3po-pop-results-buffer)
 
       (c3po--apply-pre-processors droid prompt-with-prefix)
       (c3po--add-message "user" prompt-with-prefix)
-      (apply #'c3po--request-openai-api
+      (apply #'c3po--initiate-openai-conversation
              post-fn `((droid . ,droid) (prompt . ,prompt) (args . ,args))))))
 
 (defun c3po-append-result (str)
   "Insert STR at the end of the c3po buffer."
-  (let ((buf (get-buffer-create c3po-buffer-name)))
+  (let ((buf (if c3po-results-file-path
+                 (find-file-noselect c3po-results-file-path)
+               (get-buffer-create c3po-buffer-name))))
+  ;; (let ((buf (get-buffer-create c3po-buffer-name)))
     (with-current-buffer buf
       (if (featurep 'markdown-mode)
           (gfm-mode)
         (text-mode))
+      (read-only-mode -1)
       (setq-local header-line-format
                   (concat "Droid 🤖: " (propertize (symbol-name c3po--last-used-droid) 'face '(:foreground "DarkGoldenrod3"))
                           " Model ✨: " (propertize c3po-model 'face '(:foreground "aquamarine3"))))
       (goto-char (point-max))
-      (insert (concat "\n" str)))))
+      (insert (concat "\n" str))
+      (read-only-mode t)
+      (save-buffer))))
 
 (defun c3po--replace-region-post-processor (_droid prompt result &rest args)
   "Callback used to kill region with RESULT using ARGS.
@@ -323,8 +535,11 @@ Uses PROMPT as header line format."
       (when (and (featurep 'evil) (bound-and-true-p evil-local-mode))
         (evil-insert-state))
       (when (and context lang)
-        (insert (format "\n\n>>> Context:\n```%s\n%s```" lang context))
-        (goto-char 0))
+        (if (equal current-prefix-arg 8)
+          (insert (format "\n\n>>> Context:\n%s" context))
+          (insert (format "\n\n>>> Context:\n```%s\n%s```" lang context))
+      ))
+     (goto-char 0)
       (setq-local header-line-format (format "%s. Finish ‘C-c C-c’, abort ‘C-c C-k’." prompt))
       (keymap-local-set "C-c C-c"
                         (lambda ()
@@ -347,8 +562,11 @@ Uses PROMPT as header line format."
 (defun c3po-pop-results-buffer ()
   "Display `c3po-buffer-name' in a right side window."
   (interactive)
-  (let ((buffer (get-buffer-create c3po-buffer-name)))
-    (display-buffer-in-side-window buffer
+  (let ((buf (if c3po-results-file-path
+                 (find-file-noselect c3po-results-file-path)
+               (get-buffer-create c3po-buffer-name))))
+  ;; (let ((buffer (get-buffer-create c3po-buffer-name)))
+    (display-buffer-in-side-window buf
                                    '((side . right)
                                      (window-width . 0.5)))))
 
@@ -366,7 +584,7 @@ Uses PROMPT as header line format."
   (let ((name c3po-diff-buffer-name))
     (kill-new
      (buffer-local-value 'c3po--diff-result (get-buffer name)))
-    (kill-buffer name)))
+  (c3po--hide-diff-window)))
 
 (defun c3po--diff-strings (str1 str2)
   "Compare two strings (STR1 and STR2) and return the result."
@@ -387,6 +605,12 @@ Uses PROMPT as header line format."
     (kill-buffer buf1)
     (kill-buffer buf2)
     diff-output))
+
+(defun c3po--hide-diff-window()
+  "Hide the diff window."
+  (let ((window (get-buffer-window c3po-diff-buffer-name)))
+    (when window
+      (delete-window window))))
 
 (defun c3po-explain-code ()
   "Explain the code for the selected region, or prompt the user for input."
@@ -414,7 +638,7 @@ Uses PROMPT as header line format."
 (defun c3po-new-chat (droid)
   "Reset the chat conversation and set a new chat using DROID."
   (setq c3po-chat-conversation '())
-  (c3po--add-message "system" (c3po-get-droid-property droid :system-prompt))
+  ;; (c3po--add-message "system" (c3po-get-droid-property droid :system-prompt))
   (setq c3po--last-used-droid droid))
 
 (defun c3po-reply ()
@@ -427,12 +651,20 @@ Uses PROMPT as header line format."
 (advice-add 'c3po-grammar-checker-new-chat-replace-region :after (lambda () (c3po--pop-helper-buffer c3po-diff-buffer-name)))
 (advice-add 'c3po-rewriter-new-chat-replace-region :after (lambda () (c3po--pop-helper-buffer c3po-diff-buffer-name)))
 
+(defun c3po-select-c3po-model ()
+  "Select a c3po model from the ones defined in c3po-model-alist using a completion interface."
+  (interactive)
+  (let* ((model-names (mapcar 'car c3po-model-alist))
+         (selected-model (completing-read "Select GPT model: " model-names)))
+    (setq c3po-model selected-model)
+    (message "C3PO model changed to: %S" c3po-model)))
+
 (defun c3po-toggle-c3po-model ()
   "Toggle the model between GPT 3.5 and 4."
   (interactive)
   (setq c3po-model
         (if (string-equal c3po-model "gpt-3.5-turbo")
-            "gpt-4"
+            "gpt-4-turbo"
           "gpt-3.5-turbo"))
   (message "ChatGPT model changed to: %S" c3po-model))
 
