@@ -54,17 +54,23 @@
     ("anthropic-version" . "2023-06-01")
     ("x-api-key" . ,(encode-coding-string c3po-api-key 'utf-8))))
 
+(defun c3po--local-headers ()
+  "Composes the HTTP request headers for the OpenAI API call."
+  `(("Content-Type" . "application/json")
+    ("Authorization" . "local-model")))
+
+  ;; (c3po-add-local-models
+  ;;  "openchat"
+  ;;  "llama3"
+  ;;  "phi3"
+  ;;  "llama3:instruct"
+  ;;  "llama3:8b-instruct-q8_0"
+  ;;  "mistral:7b"
+  ;;  "dolphin-llama3:8b-v2.9-q8_0")
+  ;; (setq c3po-model "llama3:8b-instruct-q8_0")
 (defvar c3po-model-alist
-  `(("codellama"                 :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
-    ("codellama:13b"             :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
-    ("dolphincoder"              :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
-    ("phi"                       :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
-    ("gpt-3.5-turbo"             :url "https://api.openai.com/v1/chat/completions"      :openaiformat t :req-headers ,'c3po--openai-headers)
-    ("gpt-4-turbo"       :url "https://api.openai.com/v1/chat/completions"      :openaiformat t :req-headers ,'c3po--openai-headers)
-    ("llama2:7b"                 :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
-    ("llama2:13b"                :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
-    ("mistral:7b"                :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
-    ("openchat"                  :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--openai-headers)
+  `(("gpt-3.5-turbo"             :url "https://api.openai.com/v1/chat/completions"      :openaiformat t :req-headers ,'c3po--openai-headers)
+    ("gpt-4-turbo"               :url "https://api.openai.com/v1/chat/completions"      :openaiformat t :req-headers ,'c3po--openai-headers)
     ("claude-3-haiku-20240307"   :url "https://api.anthropic.com/v1/messages" :openaiformat nil :req-headers ,'c3po--anthropic-headers)
     ("claude-3-sonnet-20240229"  :url "https://api.anthropic.com/v1/messages" :openaiformat nil :req-headers ,'c3po--anthropic-headers))
   "This alist maps model names to their corresponding API endpoints and whether they use OpenAI API messages.")
@@ -94,13 +100,15 @@ Answer the following question only if you know the answer or can make a well-inf
     (grammar-checker . (
                         :additional-pre-processors (c3po-show-diff-pre-processor)
                         :additional-post-processors (c3po-show-diff-post-processor)
+                        :system-prompt2 "Your task is to take the text provided and rewrite it into a clear, grammatically correct version while preserving the original meaning as closely as possible. Correct any spelling mistakes, punctuation errors, verb tense issues, word choice problems, and other grammatical mistakes."
                         :system-prompt "You're the best grammar assistant in the world!
 I will communicate with you in any language and you will correct spelling, correctess, correct sentences, correct punctuation, correct errors, fix verbs forms, fix verbs, and enhance the grammar in my text.
 You may use contractions and avoid passive voice.
 
-Do not surround the response with any text.
+- Do not surround the response with any text.
+- Do not mention the changes you've made, only respond with the edited text.
 
-Make sure to follow these rules:
+## Mistakes to correct:
 <common-english-grammar-mistakes>
   <mistake>
     <category>Verb Tense Errors</category>
@@ -113,12 +121,12 @@ Make sure to follow these rules:
   </mistake>
   <mistake>
     <category>Articles (a, an, the)</category>
-    <description>Incorrect use or omission of articles, such as using "a" instead of "an" or vice versa.</description>
-    <description>Overuse or omission of the definite article "the."</description>
+    <description>Incorrect use or omission of articles, such as using `a` instead of `an` or vice versa.</description>
+    <description>Overuse or omission of the definite article `the.`</description>
   </mistake>
   <mistake>
     <category>Prepositions</category>
-    <description>Misuse of prepositions, such as using "in" instead of "on" or "at," or omitting prepositions where they are needed.</description>
+    <description>Misuse of prepositions, such as using `in` instead of `on` or `at,` or omitting prepositions where they are needed.</description>
   </mistake>
   <mistake>
     <category>Word Order</category>
@@ -127,7 +135,7 @@ Make sure to follow these rules:
   </mistake>
   <mistake>
     <category>Pluralization</category>
-    <description>Incorrect plural forms of nouns, such as failing to add "-s" or "-es" when necessary.</description>
+    <description>Incorrect plural forms of nouns, such as failing to add `-s` or `-es` when necessary.</description>
   </mistake>
   <mistake>
     <category>Pronoun Errors</category>
@@ -144,7 +152,7 @@ Make sure to follow these rules:
   </mistake>
   <mistake>
     <category>Confusing Similar Words</category>
-    <description>Confusing words that sound similar but have different meanings and spellings (e.g., "their," "there," and "they're").</description>
+    <description>Confusing words that sound similar but have different meanings and spellings (e.g., `their,` `there,` and `they're`).</description>
   </mistake>
   <mistake>
     <category>Lack of Plural/Singular Agreement</category>
@@ -152,25 +160,14 @@ Make sure to follow these rules:
   </mistake>
 </common-english-grammar-mistakes>
 
-<example>
-test to connect to old DB after the v15 migration. to validate app can't connect to it
+# Remember
+- Do not surround the response with any text.
+- Do not mention the changes you've made, only respond with the edited text.
+- Do not change ` with '
 
-<ok_result>
-Test to connect to old DB after v15 migration. To validate app can't connect to it.
-</ok_result>
-
-<invalid_result>
-The corrected text is:
-\"Test to connect to old DB after v15 migration. To validate app can't connect to it.\"
-</invalid_result>
-<issues>
-- Is adding additional information like 'The corrected text is:' which it was mentioned not to do it.
-- It's surrounding the result between double quotes. Result shouldn't be surrounded
-</issues>
-</example>
 "
-                        :prefix-prompt-with "Edit the following text for spelling and grammar mistakes: <text>"
-                        :sufix-prompt-with "</text>"))
+                        :prefix-prompt-with "Edit the following text between triple quotes for spelling and grammar mistakes: \"\"\""
+                        :sufix-prompt-with "\n\"\"\""))
     (grammar-checker2 . (
                         :additional-pre-processors (c3po-show-diff-pre-processor)
                         :additional-post-processors (c3po-show-diff-post-processor)
@@ -200,6 +197,11 @@ Errors:
 - It's adding a line break after the result.
 </issues>
 <example>
+
+# Remember
+- do not surround the response with any text, just add the response without any xml tags.
+- Do to add additional information like the issues fixed, or no issues happened.
+
 "
                         :prefix-prompt-with "Correct the text delimited by triple quotes:\n\"\"\""
                         :sufix-prompt-with "\"\"\""))
@@ -230,6 +232,12 @@ Call `c3po-make-droid-helper-functions' to have the helper functions created if 
 (defvar c3po-chat-conversation '()
   "List of messages with droids user and assistant for the current chat.")
 
+(defun c3po-add-local-models (&rest model-names)
+  "Add one or many MODEL-NAMES following OpenAI API style to the c3po-model-alist."
+  (dolist (model-name model-names)
+    (add-to-list 'c3po-model-alist
+                 `(,model-name :url ,c3po-base-path-local-models :openaiformat t :req-headers ,'c3po--local-headers))))
+
 (defun c3po-add-new-droid(droid)
   "Basic function to add a DROID to the droids list."
   (add-to-list 'c3po-droids-alist droid)
@@ -238,6 +246,7 @@ Call `c3po-make-droid-helper-functions' to have the helper functions created if 
 
 (defun c3po-get-droid-property (droid prop)
   "Get property PROP for DROID."
+  (message "Getting %s from %s" prop droid)
   (plist-get (cdr (assoc droid c3po-droids-alist)) prop))
 
 (defun c3po--apply-pre-processors (droid prompt)
@@ -263,7 +272,7 @@ It pass to the function the DROID, PROMPT, RESULT, and ARGS."
 
 (defun c3po-is-initial-system-message-p ()
   "Return t if the chat has only received an initial system message."
-  (length= c3po-chat-conversation 1))
+  (length= c3po-chat-conversation 0))
 
 (defun c3po-add-to-buffer-pre-processor (droid prompt)
   "Pre-processor to add the DROID and PROMPT to the `c3po-buffer-name'."
@@ -287,6 +296,7 @@ It pass to the function the DROID, PROMPT, RESULT, and ARGS."
                                  :messages ,conversation
                                  :temperature ,temperature
                                  :max_tokens 2048
+                                 ;; :keep_alive -1
                                  :stream :json-false)
                         (when sys-prompt `(:system ,sys-prompt))))
    'utf-8))
@@ -406,11 +416,13 @@ Pass ARGS to the `url-retrieve' function."
            ;; in order to keep the user prompt without the configured droid prefix
            (prompt-with-prefix (if (c3po-is-initial-system-message-p)
                                    (concat
-                                    (c3po-get-droid-property droid :prefix-prompt-with)
+                                    (c3po-get-droid-property droid :prefix-prompt-with) "\n"
                                     prompt
                                     (c3po-get-droid-property droid :sufix-prompt-with))
+
                                  prompt)))
       (c3po-pop-results-buffer)
+      (message ">>> prompt-with-prefix: %S %S -  %S" droid (length= c3po-chat-conversation 1) prompt-with-prefix)
 
       (c3po--apply-pre-processors droid prompt-with-prefix)
       (c3po--add-message "user" prompt-with-prefix)
